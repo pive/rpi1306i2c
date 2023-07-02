@@ -19,10 +19,14 @@ class Ssd1306Display {
 
     void initDisplay(const uint8_t* sequence, uint8_t size);
     void setBlock(uint8_t x, uint8_t y, uint8_t w);
+
     void bufferReset();
     void bufferWrite(uint8_t data);
     void bufferWrite(const uint8_t* data, uint8_t size);
     void bufferFlush();
+
+    void directWrite(uint8_t data);
+    void directWrite(const uint8_t* data, uint8_t size);
 
   public:
     virtual ~Ssd1306Display();

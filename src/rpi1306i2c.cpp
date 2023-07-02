@@ -1,6 +1,7 @@
 // c++ headers
 #include <cmath>
 #include <string>
+#include <stdexcept>
 
 // system headers
 #include <unistd.h>
@@ -22,19 +23,19 @@ Ssd1306Display::Ssd1306Display(uint8_t dev, uint8_t addr) {
 
   m_dev = open(devPath.c_str(), O_RDWR);
   if (m_dev < 0) {
-    throw errno;
+    throw std::runtime_error(std::string("Could not open ") + devPath);
   }
   if (ioctl(m_dev, I2C_SLAVE, addr) < 0) {
-    throw errno;
+    throw std::runtime_error(std::string("Could not open ") + std::to_string(addr));
   }
 }
 
 void Ssd1306Display::initDisplay(const uint8_t* sequence, uint8_t size) {
   bufferReset();
+  uint8_t command[2] = { 0x00, 0x00 };
   for (uint8_t i = 0; i < size; i++) {
-    bufferWrite(0x00);
-    bufferWrite(sequence[i]);
-    bufferFlush();
+    command[1] = sequence[i];
+    directWrite(&command[0], sizeof(command));
   }
 }
 
@@ -72,10 +73,18 @@ void Ssd1306Display::bufferWrite(const uint8_t* data, uint8_t size) {
   }
 }
 
-void Ssd1306Display::bufferFlush() {
-  if (write(m_dev, m_buffer, m_dataSize) != m_dataSize) {
-    throw errno;
+void Ssd1306Display::directWrite(uint8_t data) {
+  directWrite(&data, 1);
+}
+
+void Ssd1306Display::directWrite(const uint8_t* data, uint8_t size) {
+  if (write(m_dev, data, size) != size) {
+    throw std::runtime_error("Could not write on device");
   }
+}
+
+void Ssd1306Display::bufferFlush() {
+  directWrite(m_buffer, m_dataSize);
   bufferReset();
 }
 
