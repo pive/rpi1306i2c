@@ -100,11 +100,9 @@ Display::~Display() {
 
 void Display::draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const Bitmap& bitmap) {
   uint8_t j;
-  const uint8_t* data = bitmap.data;
   setBlock(x, y >> 3, w);
-  for (j = (h >> 3); j > 0; j--) {
-    bufferWrite(data, w);
-    data += w;
+  for (j = 0; j < (h >> 3) && ((j + 1) * w) <= bitmap.size(); j++) {
+    bufferWrite(bitmap.subspan(j * w, w).data(), w);
   }
   bufferFlush();  
 }

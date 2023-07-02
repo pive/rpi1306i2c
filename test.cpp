@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <unistd.h>
 
+#include <span>
+
 #include "rpi1306i2c.h"
 
 constexpr uint8_t bitmap_data[] = {
@@ -11,9 +13,9 @@ constexpr uint8_t bitmap_data[] = {
   0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x0F, 0x1F, 0x00, 0x00,
 };
 
-constexpr ssd1306::Bitmap bitmap = {
-  sizeof(bitmap_data),
-  bitmap_data,
+constexpr std::span<const uint8_t> bitmap {
+  &bitmap_data[0],
+  sizeof(bitmap_data)
 };
 
 int main(void) {

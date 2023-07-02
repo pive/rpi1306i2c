@@ -2,13 +2,11 @@
 #define __RPI1306I2C_H__
 
 #include <cstdint>
+#include <span>
 
 namespace ssd1306 {
 
-struct Bitmap {
-  uint8_t size;
-  const uint8_t* data;
-};
+using Bitmap = std::span<const uint8_t>;
 
 class Display {
   private:
