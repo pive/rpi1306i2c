@@ -2,6 +2,7 @@
 #include <cmath>
 #include <string>
 #include <stdexcept>
+#include <iostream>
 
 // system headers
 #include <unistd.h>
@@ -15,9 +16,11 @@
 // private headers
 #include "constants.h"
 
-// Ssd1306Display base class
+// Display base class
 
-Ssd1306Display::Ssd1306Display(uint8_t dev, uint8_t addr) {
+namespace ssd1306 {
+
+Display::Display(uint8_t dev, uint8_t addr) {
   std::string devPath = "/dev/i2c-";
   devPath += std::to_string(dev);
 
@@ -30,7 +33,7 @@ Ssd1306Display::Ssd1306Display(uint8_t dev, uint8_t addr) {
   }
 }
 
-void Ssd1306Display::initDisplay(const uint8_t* sequence, uint8_t size) {
+void Display::initDisplay(const uint8_t* sequence, uint8_t size) {
   bufferReset();
   uint8_t command[2] = { 0x00, 0x00 };
   for (uint8_t i = 0; i < size; i++) {
@@ -39,7 +42,7 @@ void Ssd1306Display::initDisplay(const uint8_t* sequence, uint8_t size) {
   }
 }
 
-void Ssd1306Display::setBlock(uint8_t x, uint8_t y, uint8_t w) {
+void Display::setBlock(uint8_t x, uint8_t y, uint8_t w) {
   bufferReset();
   bufferWrite(0x00);
   bufferWrite(COLUMNADDR);
@@ -52,11 +55,11 @@ void Ssd1306Display::setBlock(uint8_t x, uint8_t y, uint8_t w) {
   bufferWrite(0x40);
 }
 
-void Ssd1306Display::bufferReset() {
+void Display::bufferReset() {
   m_dataSize = 0;
 }
 
-void Ssd1306Display::bufferWrite(uint8_t data) {
+void Display::bufferWrite(uint8_t data) {
   m_buffer[m_dataSize] = data;
   m_dataSize++;
   if (m_dataSize == sizeof(m_buffer)) {
@@ -65,7 +68,7 @@ void Ssd1306Display::bufferWrite(uint8_t data) {
   }
 }
 
-void Ssd1306Display::bufferWrite(const uint8_t* data, uint8_t size) {
+void Display::bufferWrite(const uint8_t* data, uint8_t size) {
   // todo: faster, copy data in buffer
   while (size--) {
     bufferWrite(*data);
@@ -73,43 +76,51 @@ void Ssd1306Display::bufferWrite(const uint8_t* data, uint8_t size) {
   }
 }
 
-void Ssd1306Display::directWrite(uint8_t data) {
+void Display::directWrite(uint8_t data) {
   directWrite(&data, 1);
 }
 
-void Ssd1306Display::directWrite(const uint8_t* data, uint8_t size) {
+void Display::directWrite(const uint8_t* data, uint8_t size) {
   if (write(m_dev, data, size) != size) {
     throw std::runtime_error("Could not write on device");
   }
 }
 
-void Ssd1306Display::bufferFlush() {
+void Display::bufferFlush() {
   directWrite(m_buffer, m_dataSize);
   bufferReset();
 }
 
-Ssd1306Display::~Ssd1306Display() {
+Display::~Display() {
   if (m_dev >= 0) {
     close(m_dev);
     m_dev = -1;
   }
 }
 
-void Ssd1306Display::draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bitmap) {
+void Display::draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const Bitmap& bitmap) {
   uint8_t j;
+  const uint8_t* data = &bitmap.data[0];
   setBlock(x, y >> 3, w);
   for (j = (h >> 3); j > 0; j--) {
-    bufferWrite(bitmap, w);
-    bitmap += w;
+    bufferWrite(data, w);
+    data += w;
   }
   bufferFlush();  
 }
 
-void Ssd1306Display::clear(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
-  // TODO
+void Display::clear(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+  uint8_t j;
+  setBlock(x, y >> 3, w);
+  for (uint8_t m = (h >> 3); m > 0; m--) {
+    for (uint8_t n = w; n > 0; n--) {
+      bufferWrite(0x00);
+    }
+  }
+  bufferFlush();
 }
 
-void Ssd1306Display::clear() {
+void Display::clear() {
   setBlock(0, 0, 0);
   for (uint8_t m = (m_height >> 3); m > 0; m--) {
     for (uint8_t n = m_width; n > 0; n--) {
@@ -119,16 +130,18 @@ void Ssd1306Display::clear() {
   bufferFlush();
 }
 
-// Ssd1306Display32 - 128x32
+// Display32 - 128x32
 
-Ssd1306Display32::Ssd1306Display32(uint8_t dev, uint8_t addr) : Ssd1306Display(dev, addr) {
+Display128x32::Display128x32(uint8_t dev, uint8_t addr) : Display(dev, addr) {
   m_height = 32;
   initDisplay(ssd1306_128x32_init_seq, sizeof(ssd1306_128x32_init_seq));
 }
 
-// Ssd1306Display64 - 128x64
+// Display64 - 128x64
 
-Ssd1306Display64::Ssd1306Display64(uint8_t dev, uint8_t addr) : Ssd1306Display(dev, addr) {
+Display128x64::Display128x64(uint8_t dev, uint8_t addr) : Display(dev, addr) {
   m_height = 64;
   initDisplay(ssd1306_128x64_init_seq, sizeof(ssd1306_128x64_init_seq));
 }
+
+} // namespace ssd1306

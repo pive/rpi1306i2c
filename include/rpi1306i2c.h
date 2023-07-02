@@ -3,9 +3,14 @@
 
 #include <cstdint>
 
-// todo: namespace?
+namespace ssd1306 {
 
-class Ssd1306Display {
+struct Bitmap {
+  uint8_t size;
+  uint8_t data[];
+};
+
+class Display {
   private:
     uint8_t m_buffer[128];
     uint8_t m_dataSize = 0;
@@ -15,7 +20,7 @@ class Ssd1306Display {
   protected:
     uint8_t m_height = 0;
 
-    Ssd1306Display(uint8_t dev, uint8_t addr);
+    Display(uint8_t dev, uint8_t addr);
 
     void initDisplay(const uint8_t* sequence, uint8_t size);
     void setBlock(uint8_t x, uint8_t y, uint8_t w);
@@ -29,21 +34,22 @@ class Ssd1306Display {
     void directWrite(const uint8_t* data, uint8_t size);
 
   public:
-    virtual ~Ssd1306Display();
+    ~Display();
 
-    void draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bitmap);
+    void draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const Bitmap& bitmap);
     void clear(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
     void clear();
 };
 
-class Ssd1306Display32: public Ssd1306Display {
+class Display128x32: public Display {
   public:
-    Ssd1306Display32(uint8_t dev, uint8_t addr);
+    Display128x32(uint8_t dev, uint8_t addr);
 };
 
-class Ssd1306Display64: public Ssd1306Display {
+class Display128x64: public Display {
   public:
-    Ssd1306Display64(uint8_t dev, uint8_t addr);
+    Display128x64(uint8_t dev, uint8_t addr);
 };
+}
 
 #endif // __RPI1306I2C_H__
