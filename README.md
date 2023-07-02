@@ -18,9 +18,9 @@ Handles 128x32 and 128x64 screens.
 ## Work in progress
 
 - Thinking of making it a header-only library
-- Optimization of writes/buffer operations
-- Use of `std::span` instead of plain byte buffer
-- Document usage, bitmap structure
+- ~~Optimization of writes/buffer operations~~
+- ~~Use of `std::span` instead of plain byte buffer~~
+- Document usage and bitmap structure
 - Proper build flags
 
 ## Build and use
