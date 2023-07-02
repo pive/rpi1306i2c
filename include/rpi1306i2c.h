@@ -3,15 +3,16 @@
 
 #include <cstdint>
 
-// todo: namespace
+// todo: namespace?
 
 class Ssd1306Display {
-  protected:
-    // std::span<uint8_t> m_buffer;
+  private:
     uint8_t m_buffer[128];
     uint8_t m_dataSize = 0;
     int m_dev = -1;
     uint8_t m_width = 128;
+
+  protected:
     uint8_t m_height = 0;
 
     Ssd1306Display(uint8_t dev, uint8_t addr);
