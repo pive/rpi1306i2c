@@ -7,7 +7,7 @@ namespace ssd1306 {
 
 struct Bitmap {
   uint8_t size;
-  uint8_t data[];
+  const uint8_t* data;
 };
 
 class Display {
