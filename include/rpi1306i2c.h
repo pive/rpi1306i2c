@@ -25,10 +25,9 @@ class Display {
 
     void bufferReset();
     void bufferWrite(uint8_t data);
-    void bufferWrite(const uint8_t* data, uint8_t size);
+    void bufferWrite(const Bitmap& bitmap);
     void bufferFlush();
 
-    void directWrite(uint8_t data);
     void directWrite(const uint8_t* data, uint8_t size);
 
   public:

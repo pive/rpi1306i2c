@@ -68,16 +68,10 @@ void Display::bufferWrite(uint8_t data) {
   }
 }
 
-void Display::bufferWrite(const uint8_t* data, uint8_t size) {
-  // todo: faster, copy data in buffer
-  while (size--) {
-    bufferWrite(*data);
-    data++;
+void Display::bufferWrite(const Bitmap& bitmap) {
+  for (const auto& u: bitmap) {
+    bufferWrite(u);
   }
-}
-
-void Display::directWrite(uint8_t data) {
-  directWrite(&data, 1);
 }
 
 void Display::directWrite(const uint8_t* data, uint8_t size) {
@@ -101,9 +95,7 @@ Display::~Display() {
 void Display::draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const Bitmap& bitmap) {
   uint8_t j;
   setBlock(x, y >> 3, w);
-  for (j = 0; j < (h >> 3) && ((j + 1) * w) <= bitmap.size(); j++) {
-    bufferWrite(bitmap.subspan(j * w, w).data(), w);
-  }
+  bufferWrite(bitmap);
   bufferFlush();  
 }
 
