@@ -7,7 +7,7 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
-#include <mutex>
+#include <semaphore>
 
 // system headers
 #include <unistd.h>
@@ -124,151 +124,137 @@ constexpr uint8_t ssd1306_128x64_init_seq[] = {
 
 namespace i2c {
 
-  template <uint8_t devid>
-  class Device {
+  class DeviceBufferedStream {
     private:
-      std::string m_i2c_dev_path;
-      int m_dev = -1;
-      std::mutex& m_mutex;
-
       uint8_t m_buffer[128];
-      uint8_t m_dataSize = 0;
+      std::size_t m_dataSize = 0;
+      int m_dev = -1;
 
-      Device(std::mutex& mutex): m_mutex(mutex) {
-        m_i2c_dev_path = "/dev/i2c-" + std::to_string(devid);
-        m_dev = open(m_i2c_dev_path.c_str(), O_RDWR);
-        if (m_dev < 0) {
-          throw std::runtime_error(std::string("Could not open ") + m_i2c_dev_path);
-        }
-        DEBUG("Opened i2c device %s.\n", m_i2c_dev_path.c_str());
+    protected:
+      int fd() {
+        return m_dev;
       }
 
     public:
-
-      virtual ~Device() {
+      DeviceBufferedStream(std::string filePath) {
+        m_dev = open(filePath.c_str(), O_RDWR);
+        if (m_dev < 0) {
+          throw std::runtime_error(std::string("Could not open ") + filePath);
+        }
+      }
+      
+      virtual ~DeviceBufferedStream() {
         if (m_dev >= 0) {
           close(m_dev);
           m_dev = -1;
-          DEBUG("Closed i2c device %s.\n", m_i2c_dev_path.c_str());
         }
       }
 
-      static const Device<devid>& get() {
-        static std::mutex s_mutex;
-        static const Device<devid> device(s_mutex);
+      void reset() {
+        m_dataSize = 0;
+      }
+
+      DeviceBufferedStream& operator<<(uint8_t data) {
+        m_buffer[m_dataSize] = data;
+        m_dataSize++;
+        if (m_dataSize == sizeof(m_buffer)) {
+          flush();
+          *this << 0x40;
+        }
+        return *this;
+      }
+
+      void flush() {
+        if (write(m_dev, m_buffer, m_dataSize) != m_dataSize) {
+          throw std::runtime_error("Could not write on device");
+        }
+        reset();
+      }
+  };
+
+  template <uint8_t devid>
+  class Device: public DeviceBufferedStream {
+    private:
+      Device(): DeviceBufferedStream(std::string("/dev/i2c-") + std::to_string(devid)) {};
+      std::counting_semaphore<1> m_lock_signal{1};
+
+    public:
+      Device<devid>(Device<devid> const&)  = delete;
+      void operator=(Device<devid> const&) = delete;
+
+      static Device<devid>& Get() {
+        static Device<devid> device;
         return device;
       }
 
-      void i2cOpen(uint8_t address) {
-        // HERE: check dev is not already in use (i2cOpen)
-        m_mutex.lock();
-        if (ioctl(m_dev, I2C_SLAVE, address) < 0) {
+      void acquire(uint8_t address) {
+        m_lock_signal.acquire();
+        if (ioctl(fd(), I2C_SLAVE, address) < 0) {
           DEBUG("Could not open i2c address 0x%x.\n", address);
           throw std::runtime_error(std::string("Could not open ") + std::to_string(address));
         }
         DEBUG("Opened i2c address 0x%x.\n", address);
       }
 
-      void i2cClose() {
-        // HERE: make dev not in use
-        m_mutex.unlock();
-      }
-
-      void bufferReset() {
-        // NOTE: might also need to protect the buffer
-        m_dataSize = 0;
-      }
-
-      void bufferWrite(uint8_t data) {
-        m_buffer[m_dataSize] = data;
-        m_dataSize++;
-        if (m_dataSize == sizeof(m_buffer)) {
-          bufferFlush();
-          bufferWrite(0x40);
-        }
-      }
-
-      void bufferFlush() {
-        directWrite(m_buffer, m_dataSize);
-        bufferReset();
-      }
-
-      void directWrite(const uint8_t* data, uint8_t size) {
-        if (write(m_dev, data, size) != size) {
-          throw std::runtime_error("Could not write on device");
-        }
+      void release() {
+        m_lock_signal.release();
       }
   };
-
 }
 
 namespace ssd1306 {
 
   using Bitmap = std::span<const uint8_t>;
   enum Height {
-    HEIGHT_32,
-    HEIGHT_64,
+    HEIGHT_32 = 32,
+    HEIGHT_64 = 64,
   };
 
-  template <uint8_t devid>
+  template <uint8_t devid, uint8_t addr>
   class Display {
     private:
   
-      uint8_t m_i2c_address;
-
       uint8_t m_width = 128;
       uint8_t m_height = 0;
 
       void initDisplay(const uint8_t* sequence, uint8_t size) {
-        auto i2c_device = i2c::Device<devid>::get();
-        i2c_device.i2cOpen(m_i2c_address);
+        auto& i2c_device = i2c::Device<devid>::Get();
+        i2c_device.acquire(addr);
 
-        i2c_device.bufferReset();
-        uint8_t command[2] = { 0x00, 0x00 };
+        i2c_device.reset();
         for (uint8_t i = 0; i < size; i++) {
-          command[1] = sequence[i];
-          i2c_device.directWrite(&command[0], sizeof(command));
+          i2c_device << 0x00 << sequence[i];
+          i2c_device.flush();
         }
 
-        i2c_device.i2cClose();
+        i2c_device.release();
       }
 
       void setBlock(uint8_t x, uint8_t y, uint8_t w) {
-        auto i2c_device = i2c::Device<devid>::get();
-        i2c_device.i2cOpen(m_i2c_address);
-
-        i2c_device.bufferReset();
-        i2c_device.bufferWrite(0x00);
-        i2c_device.bufferWrite(COLUMNADDR);
-        i2c_device.bufferWrite(x);
-        i2c_device.bufferWrite(w ? (x + w - 1) : (m_width - 1));
-        i2c_device.bufferWrite(PAGEADDR);
-        i2c_device.bufferWrite(y);
-        i2c_device.bufferWrite((m_height >> 3) - 1);
-        i2c_device.bufferFlush();
-        i2c_device.bufferWrite(0x40);
-
-        i2c_device.i2cClose();
+        auto& i2c_device = i2c::Device<devid>::Get();
+        i2c_device.reset();
+        i2c_device << 0x00;
+        i2c_device << COLUMNADDR;
+        i2c_device << x;
+        i2c_device << (w ? (x + w - 1) : (m_width - 1));
+        i2c_device << PAGEADDR;
+        i2c_device << y;
+        i2c_device << (m_height >> 3) - 1;
+        i2c_device.flush();
+        i2c_device << 0x40;
       }
 
       void writeBitmap(const Bitmap& bitmap) {
-        auto i2c_device = i2c::Device<devid>::get();
-        i2c_device.i2cOpen(m_i2c_address);
-
+        auto& i2c_device = i2c::Device<devid>::Get();
         for (const auto& u: bitmap) {
-          i2c_device.bufferWrite(u);
+          i2c_device << u;
         }
-
-        i2c_device.i2cClose();
+        i2c_device.flush();
       }
 
     public:
 
-      Display(uint8_t addr, Height height): m_i2c_address(addr) {
-        init(height);
-      };
-
-      void init(Height height) {
+      Display(Height height) {
         switch (height) {
           case HEIGHT_32:
             m_height = 32;
@@ -281,34 +267,28 @@ namespace ssd1306 {
           default:
             throw std::runtime_error("Nope.");
         }
-      }
+      };
 
       void draw(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const Bitmap& bitmap) {
-        uint8_t j;
-        auto i2c_device = i2c::Device<devid>::get();
-        i2c_device.i2cOpen(m_i2c_address);
-
+        auto& i2c_device = i2c::Device<devid>::Get();
+        i2c_device.acquire(addr);
         setBlock(x, y >> 3, w);
         writeBitmap(bitmap);
-        i2c_device.bufferFlush();
-
-        i2c_device.i2cClose();
+        i2c_device.release();
       }
 
       void clear(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
-        auto i2c_device = i2c::Device<devid>::get();
-        i2c_device.i2cOpen(m_i2c_address);
+        auto& i2c_device = i2c::Device<devid>::Get();
+        i2c_device.acquire(addr);
 
         setBlock(x, y >> 3, w);
-        // no need to iterate, write all the fucking way
         for (uint8_t m = (h >> 3); m > 0; m--) {
           for (uint8_t n = w; n > 0; n--) {
-            i2c_device.bufferWrite(0x00);
+            i2c_device << 0x00;
           }
         }
-        i2c_device.bufferFlush();
-
-        i2c_device.i2cClose();
+        i2c_device.flush();
+        i2c_device.release();
       }
 
       void clear() {

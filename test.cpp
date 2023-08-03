@@ -19,7 +19,7 @@ constexpr std::span<const uint8_t> bitmap {
 };
 
 int main(void) {
-  ssd1306::Display<1> screen(0x3C, ssd1306::HEIGHT_32);
+  ssd1306::Display<1, 0x3C> screen(ssd1306::HEIGHT_32);
   screen.draw(0, 0, 19, 32, bitmap);
   screen.draw(22, 0, 19, 32, bitmap);
   sleep(3);
