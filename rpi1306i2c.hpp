@@ -16,18 +16,21 @@
 #include <linux/i2c-dev.h>
 
 // debug prints
+#ifdef RPI1306I2C_ENABLE_DEBUG
+#include <utility>
 #include <stdio.h>
-#if 1
-#include <iostream>
-
 namespace debug
 {
-    template<typename... Args>
-    void print(const char* file, int line, Args... args) {
-      fprintf(stderr, std::forward<Args>(args)...);
-    }
+  template<typename... Args>
+  void print(const char* file, int line, Args... args) {
+    fprintf(stderr, "%s [%d]: ", file, line);
+    fprintf(stderr, std::forward<Args>(args)...);
+    fprintf(stderr, "\n");
+  }
+  void print(const char* file, int line, const char* msg) {
+    print(file, line, "%s", msg);
+  }
 }
-
 #define DEBUG(...)  debug::print(__FILE__, __LINE__, __VA_ARGS__)
 #else
 #define DEBUG(...)  ((void)0)
@@ -139,13 +142,16 @@ namespace i2c {
       DeviceBufferedStream(std::string filePath) {
         m_dev = open(filePath.c_str(), O_RDWR);
         if (m_dev < 0) {
+          DEBUG("Could not open device %s.", filePath.c_str());
           throw std::runtime_error(std::string("Could not open ") + filePath);
         }
+        DEBUG("Opened device %s.", filePath.c_str());
       }
       
       virtual ~DeviceBufferedStream() {
         if (m_dev >= 0) {
           close(m_dev);
+          DEBUG("Closed fd %d.", m_dev);
           m_dev = -1;
         }
       }
@@ -188,15 +194,17 @@ namespace i2c {
       }
 
       void acquire(uint8_t address) {
+        DEBUG("Acquiring device, address: 0x%x.", address);
         m_lock_signal.acquire();
         if (ioctl(fd(), I2C_SLAVE, address) < 0) {
-          DEBUG("Could not open i2c address 0x%x.\n", address);
+          DEBUG("Could not open i2c address 0x%x.", address);
           throw std::runtime_error(std::string("Could not open ") + std::to_string(address));
         }
-        DEBUG("Opened i2c address 0x%x.\n", address);
+        DEBUG("Opened i2c address 0x%x.", address);
       }
 
       void release() {
+        DEBUG("Released device.");
         m_lock_signal.release();
       }
   };
@@ -265,7 +273,7 @@ namespace ssd1306 {
             initDisplay(ssd1306_128x64_init_seq, sizeof(ssd1306_128x64_init_seq));
             break;
           default:
-            throw std::runtime_error("Nope.");
+            throw std::runtime_error("Unsupported display.");
         }
       };
 
